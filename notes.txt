@@ -1,0 +1,12 @@
+PS C:\Users\Megha Daniel\Documents\Flask_learn>backend python -m venv env
+PS C:\Users\Megha Daniel\Documents\Flask_learn>backend .\env\Scripts\activate.ps1
+PS C:\Users\Megha Daniel\Documents\Flask_learn>backend flask run
+
+pip install flask Flask-pymongo flask-cors
+pip install python-dotenv
+pip install requests
+pip install python-decouple
+pip install pandas
+
+
+
