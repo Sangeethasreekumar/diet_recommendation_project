@@ -1,77 +1,63 @@
-from flask import Flask, request, jsonify
-from flask_pymongo import PyMongo, ObjectId
-from flask_cors import CORS
+@jwt_required() : users with valid token only can access various pages
 
-app = Flask(__name__)
-app.config['MONGO_URI'] = 'mongodb+srv://meghananma:WL2YT0ndBgIgn9xR@cluster0.glqqv.mongodb.net/diet_recommendation?retryWrites=true&w=majority&appName=Cluster0'
-mongo = PyMongo(app)
+ {/* Public Routes */}
+      <Route path="/login" element={<Login/>}/>
+      <Route path="/signup" element={<Signup/>}/>
 
-CORS(app)
-db = mongo.db
+      {/* Protected Routes */}
+      <Route path="/submit-data" element={<ProfilePage/>}/>
+      <Route path="/food-intake" element={<FoodIntakePage/>}/>
+      <Route path="/dashboard" element={<Dashboard />} />
 
-@app.route('/users', methods=['POST'])
-def createUser():
-    try:
-        if not request.is_json:
-            return jsonify({'error': 'Request must be in JSON format'}), 400
 
-        # Extract data from JSON request body
-        data = request.get_json()
+      
+// import React, { useState } from "react";
+// import axios from "axios";
 
-        # Ensure required fields are present in the JSON
-        if not all(key in data for key in ['name', 'email', 'contact', 'address']):
-            return jsonify({'error': 'Missing required fields'}), 400
+// const FoodIntake = () => {
+//   const [foodQuery, setFoodQuery] = useState('');
+//   const [foodSuggestions, setFoodSuggestions] = useState([]);
+//   const [selectedFood, setSelectedFood] = useState(null);
+//   const [grams, setGrams] = useState('');
 
-        # Insert into MongoDB
-        result = mongo.db['users'].insert_one({
-            'name': data['name'],
-            'email': data['email'],
-            'contact': data['contact'],
-            'address': data['address']
-        })
-        
-        return jsonify({'id': str(result.inserted_id), 'msg': "User created successfully"}), 201
+//   const fetchFoodSuggestions = async (query) => {
+//     if (query) {
+//       try {
+//         const response = await axios.get(`/api/fetch-food-data`, { params: { query } });
+//         setFoodSuggestions(response.data);
+//       } catch (error) {
+//         console.error("Error fetching food suggestions:", error);
+//       }
+//     } else {
+//       setFoodSuggestions([]);
+//     }
+//   };
 
-    except Exception as e:
-        # Log the error in the terminal for debugging
-        print("Error:", e)
-        return jsonify({'error': 'Internal Server Error', 'details': str(e)}), 500
+//   const handleAddFoodItem = async () => {
+//     if (!selectedFood || !grams) return alert("Invalid input");
+//     const mealType = prompt("Enter Meal Type:");
+//     const token = localStorage.getItem("access_token");
 
-# @app.route('/users',methods=['GET'])
-# def getusers():
-#     users=[]
-#     for doc in db.find():
-#         users.append
+//     try {
+//       await axios.post("/api/add-food-log", { mealTime: mealType, foods: [{ ...selectedFood, quantity: grams }] }, { headers: { Authorization: `Bearer ${token}` } });
+//       alert("Food log added successfully!");
+//     } catch (error) {
+//       console.error("Error logging food:", error);
+//     }
+//   };
 
-@app.route('/users/<id>',methods=['GET'])
-def getUser(id):
-    user = db['users'].find_one({'_id':ObjectId(id)})
-    return jsonify(
-        {
-        '_id': str(user['_id']),
-        'name': user['name'],
-        'email': user['email'],
-        'contact': user['contact'],
-        'address': user['address']
-        }
-        )
+//   return (
+//     <div>
+//       <h1>Food Intake</h1>
+//       <input type="text" value={foodQuery} onChange={(e) => fetchFoodSuggestions(e.target.value)} placeholder="Search food" />
+//       {foodSuggestions.map((food) => (
+//         <p key={food.fdcId} onClick={() => setSelectedFood(food)}>{food.name}</p>
+//       ))}
+//       <input type="number" value={grams} onChange={(e) => setGrams(e.target.value)} placeholder="Enter grams" />
+//       <button onClick={handleAddFoodItem}>Add Food</button>
+//     </div>
+//   );
+// };
 
-@app.route('/users/<id>',methods=['PUT'])
-def updateUser(id):
-    db['users'].update_one(
-        { '_id':ObjectId(id)},
-       {
-         '$set':
-         {
-            'name': request.json['name'],
-            'email': request.json['email'],
-            'contact': request.json['contact'],
-            'address': request.json['address']
+// export default FoodIntake;
 
-         }  
-       }
-       )
-    return jsonify({'msg':"Successful updation"})
-
-if __name__ == '__main__':
-    app.run(debug=True)

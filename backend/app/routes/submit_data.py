@@ -1,65 +1,76 @@
 from flask import Blueprint, Flask, request, jsonify
-from app import app, mongo  # Assuming you have app and mongo defined in app.py
-# from app.config import  USDA_API_KEY
+from app import app, mongo 
+from app.models.profile import ProfileGoals
+from flask_jwt_extended import jwt_required ,get_jwt_identity
 
 submit_data_blueprint = Blueprint('submit_data', __name__)  # Rename the blueprint variable to avoid conflicts
 
-@submit_data_blueprint.route('/submit-data',methods=['GET', 'POST'])
+@submit_data_blueprint.route('/submit-data', methods=['GET', 'POST'])
+@jwt_required()
 def submit_data():
     if request.method == 'GET':
-         # Log a message without exposing the API key
-        app.logger.info("Submit data route accessed.") 
-        # Handle GET requests (e.g., return an example or status)
         return jsonify({"message": "Submit data route is working. Use POST to send data."}), 200
     
     if request.method == 'POST':
         try:
+            user_id = get_jwt_identity()  # This should be a string (the MongoDB _id as string)
+            print("User ID from JWT:", user_id)  # Debugging
+            
+            if not user_id:
+                return jsonify({"error": "Invalid or expired token"}), 401
+            
             # Get the JSON data from the request
             data = request.get_json()
 
             # Validate required fields
-            if not data or not data.get("weight") or not data.get("height") or not data.get("food_calories"):
-                return jsonify({"error": "Missing required fields: weight, height, or food_calories"}), 400
+            required_fields = ["weight", "height", "age", "gender"]
+            if not all(field in data for field in required_fields):
+                return jsonify({"error": "Missing required fields: weight, height, age, or gender"}), 400
 
-            # Ensure food_calories is a dictionary and not empty
-            if not isinstance(data["food_calories"], dict) or not data["food_calories"]:
-                return jsonify({"error": "food_calories must be a non-empty dictionary"}), 400
+            # Extract user data
+            weight = data["weight"]
+            height = data["height"]
+            age = data["age"]
+            gender = data["gender"].lower()  # Convert to lowercase for consistency
 
-            # Extract user data from the request
-            user_data = {
-                "weight": data["weight"],  # Required field
-                "height": data["height"],  # Required field
-                "goal": data.get("goal", "Not specified"),  # Optional field with default value
-                "preference": data.get("preference", "Not specified"),  # Optional field with default value
-                "health_issues": data.get("health_issues", "None"),  # Optional field with default value
-                "food_calories": data["food_calories"],  # Required field
-            }
-
-            # Check if height is valid to avoid division by zero or invalid values
-            if user_data["height"] <= 0:
-                return jsonify({"error": "Height must be greater than 0"}), 400
+            # **Calculate BMR using Mifflin-St Jeor Equation**
+            if gender == "male":
+                bmr = (10 * weight) + (6.25 * height) - (5 * age) + 5
+            elif gender == "female":
+                bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161
+            else:
+                return jsonify({"error": "Invalid gender. Must be 'Male' or 'Female'."}), 400
 
             # Calculate BMI
-            weight = user_data["weight"]
-            height_meters = user_data["height"] / 100  # Convert height from cm to meters
-            bmi = weight / (height_meters ** 2)  # BMI formula: weight (kg) / height (m)^2
+            bmi = weight / ((height / 100) ** 2)  # BMI formula: weight (kg) / height (m)^2
 
-            # Calculate total calorie intake
-            total_calories = sum(user_data["food_calories"].values())  # Sum the calorie values
-            calorie_limit = 2000  # This can be customized based on user's goal and other data
-            within_limit = total_calories <= calorie_limit
+            # Create ProfileGoals object
+            user_data = ProfileGoals(
+                weight=weight,
+                height=height,
+                age=age,
+                gender=gender,
+                bmr=bmr,  # Store calculated BMR
+                weightGoal=data.get("weightGoal", "Not specified"),
+                dietType=data.get("dietType", "Not specified"),
+                healthConditions=data.get("healthConditions", []),
+                userId=user_id  # User ID directly from JWT
+            )
 
-            # Save user data into MongoDB
-            user_collection = mongo.db.profile_goals
-            user_collection.insert_one(user_data)
+            # Convert the ProfileGoals object to a dictionary for MongoDB insertion
+            user_dict = user_data.to_dict()
 
-            # Return the BMI and whether the calorie intake is within the limit
+            # Insert profile goals into MongoDB collection
+            profile_collection = mongo.db.profile_goals
+            result = profile_collection.insert_one(user_dict)
+
+            # Return success response with BMI, BMR, and profile ID
             return jsonify({
-                "bmi": bmi,
-                "within_limit": within_limit
-            }), 200  # HTTP Status Code 200 (OK)
+                "message": "Profile data submitted successfully",
+                "bmi": round(bmi, 2),
+                "bmr": round(bmr, 2),
+                "profileId": str(result.inserted_id)  # Return the inserted profile's ID
+            }), 201
 
         except Exception as e:
-            # Handle unexpected errors
-            return jsonify({"error": f"An error occurred: {str(e)}"}), 500  # Internal Server Error
-
+            return jsonify({"error": f"An error occurred: {str(e)}"}), 500
