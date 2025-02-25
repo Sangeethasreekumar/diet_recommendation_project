@@ -16,9 +16,31 @@ pip install -r requirements.txt
   "password":"megha"
 }
 
+
+
 {
-  "weight": 70,
-  "height": 175,
-  "age": 28,
-  "gender": "male"
+  "mealTime": "Lunch",
+  "foods": [
+    {
+      "name": "Grilled Chicken",
+      "calories": 220,
+      "fat": 5,
+      "carbs": 0,
+      "protein": 43
+    },
+    {
+      "name": "Brown Rice",
+      "calories": 215,
+      "fat": 1.6,
+      "carbs": 45,
+      "protein": 5
+    },
+    {
+      "name": "Steamed Broccoli",
+      "calories": 55,
+      "fat": 0.6,
+      "carbs": 11,
+      "protein": 4.7
+    }
+  ]
 }

@@ -1,0 +1,3 @@
+circular imports: 
+
+initialization lines :  evry python package has __init__ file. its executed first before anythong loads, its useful since it will execute the necessary varialbes and responsible for start our app

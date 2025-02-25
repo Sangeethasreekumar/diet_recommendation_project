@@ -1,0 +1,664 @@
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+
+const healthConditionsList = ["None", "Sugar", "Cholesterol", "BP", "Hair Loss"];
+const weightGoals = ["Select", "Gain Weight", "Lose Weight","Maintain Weight"];
+const genderOptions = ["Select", "Male", "Female"];
+const dietTypes = ["Non-Veg", "Vegetarian"];
+
+const activityOptions = [
+  { value: "0", label: "Select" },
+  { value: "1.2", label: "Sedentary" },
+  { value: "1.375", label: "Lightly Active" },
+  { value: "1.55", label: "Moderately Active" },
+  { value: "1.725", label: "Very Active" },
+  { value: "1.9", label: "Super Active" },
+];
+
+
+
+const ProfilePage = () => {
+  const [formData, setFormData] = useState({
+    weight: "",
+    height: "",
+    age: "",
+    gender: "Select",
+    weightGoal: "Select",
+    dietType: "Select",
+    healthConditions: [],
+  });
+
+  const [bmi, setBmi] = useState(null);
+  const [bmr, setBmr] = useState(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [profileExists, setProfileExists] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [activityLevel, setActivityLevel] = useState("0"); // Default value
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        console.log("No token found, redirecting to login...");
+        navigate("/login");
+        return;
+      }
+
+      try {
+        const response = await axios.get("/api/get-profile", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.data) {
+          console.log("Profile found:", response.data);
+          setFormData({
+            weight: response.data.weight || "",
+            height: response.data.height || "",
+            age: response.data.age || "",
+            gender: response.data.gender || "Select",
+            weightGoal: response.data.goals?.weightGoal || "Maintain Weight",
+            dietType: response.data.goals?.dietType || "Non-Veg",
+            healthConditions: response.data.healthConditions?.length > 0 ? response.data.healthConditions : [],
+          });
+          setBmi(response.data.bmi);
+          setBmr(response.data.bmr);
+          setProfileExists(true);
+        }
+      } catch (err) {
+        console.log("No existing profile found:", err.response?.data?.error);
+      }
+    };
+
+    fetchProfile();
+  }, [navigate]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setError("Unauthorized: Please log in again.");
+      return;
+    }
+
+    // Convert inputs to numbers to avoid string issues
+    const processedFormData = {
+      ...formData,
+      weight: parseFloat(formData.weight),
+      height: parseFloat(formData.height),
+      age: parseInt(formData.age, 10),
+    };
+
+    const endpoint = profileExists ? "/api/update-profile" : "/api/submit-data";
+
+    try {
+      const response = await axios.post(endpoint, processedFormData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setBmi(response.data.bmi);
+      setBmr(response.data.bmr);
+      setMessage(response.data.message);
+      setError("");
+      setProfileExists(true);
+      setIsEditing(false);
+    } catch (err) {
+      setError(err.response?.data?.error || "Submission failed");
+      setMessage("");
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      {profileExists && !isEditing ? (
+        <div className="bg-white p-6 rounded-lg shadow-lg w-96 text-center">
+          <h2 className="text-xl font-bold mb-4">Your Profile</h2>
+          <p><strong>Weight:</strong> {formData.weight} kg</p>
+          <p><strong>Height:</strong> {formData.height} cm</p>
+          <p><strong>Age:</strong> {formData.age}</p>
+          <p><strong>Gender:</strong> {formData.gender}</p>
+          <p><strong>Weight Goal:</strong> {formData.weightGoal}</p>
+          <p><strong>Diet Type:</strong> {formData.dietType}</p>
+          <p><strong>Health Conditions:</strong> {formData.healthConditions.join(", ") || "None"}</p>
+          <p><strong>BMI:</strong> {bmi}</p>
+          <p><strong>BMR:</strong> {bmr}</p>
+          <button onClick={() => setIsEditing(true)} className="mt-4 bg-blue-500 text-white p-2 rounded">Update Profile</button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg w-96">
+          <h2 className="text-xl font-bold mb-4">{profileExists ? "Update Profile" : "Submit Profile Data"}</h2>
+          {message && <p className="text-green-500">{message}</p>}
+          {error && <p className="text-red-500">{error}</p>}
+
+          <div className="mb-2">
+            <label>Weight:</label>
+            <input type="number" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} className="w-full p-2 border" required />
+          </div>
+
+          <div className="mb-2">
+            <label>Height:</label>
+            <input type="number" value={formData.height} onChange={(e) => setFormData({ ...formData, height: e.target.value })} className="w-full p-2 border" required />
+          </div>
+
+          <div className="mb-2">
+            <label>Age:</label>
+            <input type="number" value={formData.age} onChange={(e) => setFormData({ ...formData, age: e.target.value })} className="w-full p-2 border" required />
+          </div>
+
+          <div className="mb-2">
+            <label>Gender:</label>
+            <select value={formData.gender} onChange={(e) => setFormData({ ...formData, gender: e.target.value })} className="w-full p-2 border">
+              {genderOptions.map((genders) => (
+                <option key={genders} value={genders}>{genders}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-2">
+            <label>Weight Goal:</label>
+            <select value={formData.weightGoal} onChange={(e) => setFormData({ ...formData, weightGoal: e.target.value })} className="w-full p-2 border">
+              {weightGoals.map((goal) => (
+                <option key={goal} value={goal}>{goal}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-2">
+          <label>Activity Level:</label>
+            <select value={activityLevel} onChange={(e) => setActivityLevel(e.target.value)}>
+              {activityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>;
+          </div>
+
+          <div className="mb-2">
+            <label>Diet Preference:</label>
+            <select value={formData.dietType} onChange={(e) => setFormData({ ...formData, dietType: e.target.value })} className="w-full p-2 border">
+              {dietTypes.map((diet) => (
+                <option key={diet} value={diet}>{diet}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-2">
+            <label>Health Conditions:</label>
+              <select
+              value={formData.healthConditions}
+              onChange={(e) => setFormData({ ...formData, healthConditions: [e.target.value] })} 
+              className="w-full p-2 border"
+            >
+              {healthConditionsList.map((condition) => (
+                <option key={condition} value={condition}>{condition}</option>
+              ))}
+            </select>
+
+          </div>
+
+          <button type="submit" className="w-full bg-blue-500 text-white p-2 rounded">{profileExists ? "Update" : "Submit"}</button>
+        </form>
+      )}
+    </div>
+  );
+};
+
+export default ProfilePage;
+
+
+import React, { useState } from "react";
+import axios from "axios";
+import "./FoodIntake.css"; // Import the CSS file
+
+const FoodIntake = ({ userData }) => {
+  const [foodQuery, setFoodQuery] = useState('');
+  const [foodSuggestions, setFoodSuggestions] = useState([]);
+  const [selectedFood, setSelectedFood] = useState(null);
+  const [foodItems, setFoodItems] = useState([]);
+  const [grams, setGrams] = useState('');
+  const [mealTime, setMealTime] = useState('');
+
+  const getAuthToken = () => localStorage.getItem("token");
+
+  const fetchFoodSuggestions = async (query) => {
+    if (!query) {
+      setFoodSuggestions([]);
+      return;
+    }
+
+    try {
+      const token = getAuthToken();
+      const response = await axios.get(`/api/fetch-food-data`, {
+        params: { query: query.charAt(0).toUpperCase() + query.slice(1) },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      let data = response.data;
+      if (typeof data === 'string') {
+        data = data.replace(/NaN/g, 'null');
+        data = JSON.parse(data);
+      }
+
+      if (Array.isArray(data)) {
+        setFoodSuggestions(data.map((item) => ({
+          fdcId: item.fdcId,
+          name: item.name,
+          calories: item.calories || 0,
+          total_fat: item.total_fat || 0,
+          carbohydrate: item.carbohydrate || 0,
+          protein: item.protein || 0,
+        })));
+      } else {
+        setFoodSuggestions([]);
+      }
+    } catch (error) {
+      console.error("Error fetching food suggestions:", error);
+      setFoodSuggestions([]);
+    }
+  };
+
+  const handleFoodInputChange = (e) => {
+    setFoodQuery(e.target.value);
+    fetchFoodSuggestions(e.target.value);
+  };
+
+  const extractNumber = (value) => {
+    if (typeof value === "string") {
+      return parseFloat(value.replace(/[^\d.]/g, "")) || 0;
+    }
+    return value || 0;
+  };
+  
+
+  const fetchFoodDetails = async (fdcId) => {
+    try {
+      const token = getAuthToken();
+      const response = await axios.get(`/api/fetch-food-details/${fdcId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+  
+      let data = response.data;
+      if (typeof data === "string") {
+        data = data.replace(/NaN/g, "null");
+        data = JSON.parse(data);
+      }
+  
+      // Helper function to extract numeric values from strings
+  
+      const formattedFood = {
+        name: data.name,
+        calories: extractNumber(data.calories),
+        fat: extractNumber(data.total_fat),  // Ensure total_fat extraction
+        carbs: extractNumber(data.carbohydrate), // Ensure carbohydrate extraction
+        protein: extractNumber(data.protein),
+      };
+  
+      console.log("Food Data Extracted:", formattedFood); // Debugging log
+      setSelectedFood(formattedFood);
+    } catch (error) {
+      console.error("Error fetching food details:", error);
+    }
+  };
+
+  
+  const handleAddFoodItem = () => {
+    if (selectedFood && grams && parseInt(grams, 10) > 0) {
+      const gramsValue = parseInt(grams, 10);
+      const foodWithData = {
+        food: selectedFood.name,
+        grams: gramsValue,
+        calories: (extractNumber(selectedFood.calories) * (gramsValue / 100)) || 0,
+        fat: (extractNumber(selectedFood.fat) * (gramsValue / 100)),  // Corrected key
+        carbs: (extractNumber(selectedFood.carbs) * (gramsValue / 100)), // Corrected key
+        protein: (extractNumber(selectedFood.protein) * (gramsValue / 100)) || 0,
+      };
+      console.log("Adding Food Item:", foodWithData);  // Debugging log
+  
+      setFoodItems([...foodItems, foodWithData]);
+      setFoodQuery('');
+      setGrams('');
+      setFoodSuggestions([]);
+      setSelectedFood(null);
+    }
+  };
+  
+
+  const handleMealLogSubmit = async () => {
+    try {
+      const token = getAuthToken();
+      const foodLogData = {
+        mealTime, // ✅ Restored mealTime selection
+        foods: foodItems.map(item => ({
+          name: item.food,
+          calories: item.calories,
+          fat: item.fat,
+          carbs: item.carbs,
+          protein: item.protein,
+        })),
+      };
+      await axios.post("/api/add-food-log", foodLogData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setFoodItems([]);
+    } catch (error) {
+      console.error("Error adding food log:", error);
+    }
+  };
+
+  return (
+    <div className="food-intake-container">
+      <h1>Food Intake</h1>
+
+      <div className="food-input-container">
+        <div className="input-group">
+          <label>Search Food:</label>
+          <input type="text" value={foodQuery} onChange={handleFoodInputChange} placeholder="Enter food name" />
+          {foodSuggestions.length > 0 && (
+            <ul className="food-suggestions">
+              {foodSuggestions.map((food) => (
+                <li key={food.fdcId} onClick={() => fetchFoodDetails(food.fdcId)}>
+                  {food.name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {selectedFood && (
+          <div className="selected-food">
+            <h2>{selectedFood.name}</h2>
+          </div>
+        )}
+
+        <div className="input-group">
+          <label>Grams:</label>
+          <input type="number" value={grams} onChange={(e) => setGrams(e.target.value)} placeholder="Enter grams" />
+          <button onClick={handleAddFoodItem}>Add Food</button>
+        </div>
+
+        <div className="input-group">
+          <label>Meal Time:</label>
+          <select value={mealTime} onChange={(e) => setMealTime(e.target.value)}>
+            <option value="">Select Meal Time</option>
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner">Dinner</option>
+            <option value="snack">Snack</option>
+          </select>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Food</th>
+            <th>Grams</th>
+            <th>Calories</th>
+            <th>Fat</th>
+            <th>Carbs</th>
+            <th>Protein</th>
+          </tr>
+        </thead>
+        <tbody>
+          {foodItems.map((item, index) => (
+            <tr key={index}>
+              <td>{item.food}</td>
+              <td>{item.grams}</td>
+              <td>{item.calories.toFixed(1)}</td>
+              <td>{item.fat.toFixed(1)}</td>
+              <td>{item.carbs.toFixed(1)}</td>
+              <td>{item.protein.toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <button className="submit-btn" onClick={handleMealLogSubmit}>Submit Meal Log</button>
+    </div>
+  );
+};
+
+export default FoodIntake;
+
+
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+import pandas as pd
+from datetime import datetime, timezone
+from bson import ObjectId
+from app import mongo
+
+# Define the Blueprint
+food_routes = Blueprint('food_routes', __name__)
+
+# Load the CSV file into a DataFrame
+try:
+    df = pd.read_csv('app/data/nutrition_data.csv')
+except FileNotFoundError:
+    print("Error: nutrition_data.csv file not found!")
+    df = pd.DataFrame()
+
+# Fetch list of matching foods
+@food_routes.route('/fetch-food-data', methods=['GET'])
+@jwt_required()
+def fetch_food_data():
+    query = request.args.get('query', '')
+    if not query:
+        return jsonify({"error": "Query parameter is required"}), 400
+    
+    if df.empty:
+        return jsonify({"error": "Food database is empty"}), 500
+    
+    filtered_foods = df[df['name'].str.contains(query, case=False, na=False)]
+    foods = filtered_foods.to_dict(orient='records')
+    
+    return jsonify(foods)
+
+# Fetch detailed food information
+@food_routes.route('/fetch-food-details/<int:fdcId>', methods=['GET'])
+@jwt_required()
+def fetch_food_details(fdcId):
+    if df.empty:
+        return jsonify({"error": "Food database is empty"}), 500
+    
+    food_details = df[df.get('fdcId', pd.Series()) == fdcId]
+    
+    if not food_details.empty:
+        return jsonify(food_details.iloc[0].to_dict())
+    
+    return jsonify({"error": "Food item not found"}), 404
+
+# Food logging functionality
+@food_routes.route("/add-food-log", methods=["POST"])
+@jwt_required()
+def add_food_log():
+    try:
+        user_id = ObjectId(get_jwt_identity())
+        data = request.get_json()
+        meal_time = data.get("mealTime")
+        foods = data.get("foods", [])
+        
+        if not meal_time or not foods:
+            return jsonify({"error": "Meal time and foods are required"}), 400
+        
+        meal_totals = {
+            "calories": sum(food["calories"] for food in foods),
+            "protein": sum(food["protein"] for food in foods),
+            "fat": sum(food["fat"] for food in foods),
+            "carbs": sum(food["carbs"] for food in foods)
+        }
+        
+        today_date = datetime.combine(datetime.now(timezone.utc).date(), datetime.min.time())
+
+        food_logs_collection = mongo.db.food_logs
+        existing_log = food_logs_collection.find_one({"userId": user_id, "date": today_date})
+        
+        if existing_log:
+            food_logs_collection.update_one(
+                {"_id": existing_log["_id"]},
+                {
+                    "$push": {"meals": {"mealTime": meal_time, "foods": foods, "mealTotals": meal_totals}},
+                    "$inc": {
+                        "totalCaloriesForDay.calories": meal_totals["calories"],
+                        "totalCaloriesForDay.protein": meal_totals["protein"],
+                        "totalCaloriesForDay.fat": meal_totals["fat"],
+                        "totalCaloriesForDay.carbs": meal_totals["carbs"]
+                    }
+                }
+            )
+            return jsonify({"message": "Food log updated"}), 200
+        else:
+            new_food_log = {
+                "userId": user_id,
+                "date": today_date,
+                "meals": [{"mealTime": meal_time, "foods": foods, "mealTotals": meal_totals}],
+                "totalCaloriesForDay": meal_totals,
+                "created_at": datetime.now(timezone.utc)
+            }
+            food_logs_collection.insert_one(new_food_log)
+            return jsonify({"message": "Food log created"}), 201
+
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+from flask import Blueprint, Flask, request, jsonify
+from app import app, mongo 
+from app.models.profile import ProfileGoals
+from flask_jwt_extended import jwt_required ,get_jwt_identity
+
+submit_data_blueprint = Blueprint('submit_data', __name__)  # Rename the blueprint variable to avoid conflicts
+
+@submit_data_blueprint.route('/submit-data', methods=['GET', 'POST'])
+@jwt_required()
+def submit_data():
+    if request.method == 'GET':
+        return jsonify({"message": "Submit data route is working. Use POST to send data."}), 200
+    
+    if request.method == 'POST':
+        try:
+            user_id = get_jwt_identity()  # This should be a string (the MongoDB _id as string)
+            print("User ID from JWT:", user_id)  # Debugging
+            
+            if not user_id:
+                return jsonify({"error": "Invalid or expired token"}), 401
+            
+            # Get the JSON data from the request
+            data = request.get_json()
+
+            # Validate required fields
+            required_fields = ["weight", "height", "age", "gender"]
+            if not all(field in data for field in required_fields):
+                return jsonify({"error": "Missing required fields: weight, height, age, or gender"}), 400
+
+            # Extract user data
+            weight = data["weight"]
+            height = data["height"]
+            age = data["age"]
+            gender = data["gender"].lower()  # Convert to lowercase for consistency
+
+            # **Calculate BMR using Mifflin-St Jeor Equation**
+            if gender == "male":
+                bmr = (10 * weight) + (6.25 * height) - (5 * age) + 5
+            elif gender == "female":
+                bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161
+            else:
+                return jsonify({"error": "Invalid gender. Must be 'Male' or 'Female'."}), 400
+
+            # Calculate BMI
+            bmi = weight / ((height / 100) ** 2)  # BMI formula: weight (kg) / height (m)^2
+
+            # Create ProfileGoals object
+            user_data = ProfileGoals(
+                weight=weight,
+                height=height,
+                age=age,
+                gender=gender,
+                bmr=bmr,  # Store calculated BMR
+                weightGoal=data.get("weightGoal", "Not specified"),
+                dietType=data.get("dietType", "Not specified"),
+                healthConditions=data.get("healthConditions", []),
+                userId=user_id  # User ID directly from JWT
+            )
+
+            # Convert the ProfileGoals object to a dictionary for MongoDB insertion
+            user_dict = user_data.to_dict()
+
+            # Insert profile goals into MongoDB collection
+            profile_collection = mongo.db.profile_goals
+            result = profile_collection.insert_one(user_dict)
+
+            # Return success response with BMI, BMR, and profile ID
+            return jsonify({
+                "message": "Profile data submitted successfully",
+                "bmi": round(bmi, 2),
+                "bmr": round(bmr, 2),
+                "profileId": str(result.inserted_id)  # Return the inserted profile's ID
+            }), 201
+
+        except Exception as e:
+            return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+        
+
+@submit_data_blueprint.route('/get-profile', methods=['GET'])
+@jwt_required()
+def get_profile():
+    try:
+        user_id = get_jwt_identity()
+        profile_collection = mongo.db.profile_goals
+        user_profile = profile_collection.find_one({"userId": user_id})
+
+        if not user_profile:
+            return jsonify({"error": "Profile not found"}), 404
+
+        user_profile["_id"] = str(user_profile["_id"])  # Convert ObjectId to string
+        return jsonify(user_profile), 200
+
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+    
+@submit_data_blueprint.route('/update-profile', methods=['POST'])
+@jwt_required()
+def update_profile():
+    try:
+        user_id = get_jwt_identity()
+        data = request.get_json()
+
+        required_fields = ["weight", "height", "age", "gender"]
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        # Extract user data
+        weight, height, age, gender = data["weight"], data["height"], data["age"], data["gender"].lower()
+
+        # Recalculate BMR & BMI
+        bmr = (10 * weight) + (6.25 * height) - (5 * age) + (5 if gender == "male" else -161)
+        bmi = weight / ((height / 100) ** 2)
+
+        profile_collection = mongo.db.profile_goals
+        updated_data = {
+            "$set": {
+                "weight": weight, "height": height, "age": age, "gender": gender,
+                "bmr": bmr, "bmi": bmi,
+                "weightGoal": data.get("weightGoal", "Not specified"),
+                "dietType": data.get("dietType", "Not specified"),
+                "healthConditions": data.get("healthConditions", [])
+            }
+        }
+
+        result = profile_collection.update_one({"userId": user_id}, updated_data)
+
+        if result.matched_count == 0:
+            return jsonify({"error": "Profile not found"}), 404
+
+        return jsonify({"message": "Profile updated successfully", "bmi": round(bmi, 2), "bmr": round(bmr, 2)}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+
+

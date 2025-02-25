@@ -1,13 +1,15 @@
-from datetime import datetime,timezone
+from datetime import datetime, timezone
 
 class ProfileGoals:
-    def __init__(self, weight, height, age, gender, bmr=None, weightGoal="Not specified", 
+    def __init__(self, weight, height, age, gender, activityLevel, bmr=None, bmi=None, weightGoal="Not specified", 
                  dietType="Not specified", healthConditions=None, userId=None):
         self.weight = weight
         self.height = height
         self.age = age
         self.gender = gender
+        self.activityLevel = activityLevel  # <-- Ensure this is stored
         self.bmr = bmr
+        self.bmi = bmi
         self.weightGoal = weightGoal
         self.dietType = dietType
         self.healthConditions = healthConditions or []  # Default to empty list if None
@@ -22,7 +24,9 @@ class ProfileGoals:
             "height": self.height,
             "age": self.age,
             "gender": self.gender,
+            "activityLevel": float(self.activityLevel),  # Ensure it’s a float
             "bmr": self.bmr,
+            "bmi": self.bmi,  # <-- Make sure this is also included
             "goals": {
                 "weightGoal": self.weightGoal,
                 "dietType": self.dietType,
