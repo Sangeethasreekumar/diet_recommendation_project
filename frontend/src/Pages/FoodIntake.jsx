@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
-import "./FoodIntake.css"; // Import the CSS file
+import "./FoodIntake.css"; 
 
 const FoodIntake = ({ userData }) => {
   const [foodQuery, setFoodQuery] = useState('');
@@ -9,8 +9,30 @@ const FoodIntake = ({ userData }) => {
   const [foodItems, setFoodItems] = useState([]);
   const [grams, setGrams] = useState('');
   const [mealTime, setMealTime] = useState('');
+  const [calorieData, setCalorieData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [currentCalorieIntake, setCurrentCalorieIntake] = useState(0);
 
   const getAuthToken = () => localStorage.getItem("token");
+
+  // Fetch daily calorie data
+  useEffect(() => {
+    const fetchCalorieData = async () => {
+      try {
+        const token = getAuthToken();
+        const response = await axios.get("/api/get-daily-calories", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCalorieData(response.data);
+      } catch (error) {
+        console.error("Error fetching daily calories:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCalorieData();
+  }, []);
 
   const fetchFoodSuggestions = async (query) => {
     if (!query) {
@@ -60,7 +82,6 @@ const FoodIntake = ({ userData }) => {
     }
     return value || 0;
   };
-  
 
   const fetchFoodDetails = async (fdcId) => {
     try {
@@ -68,31 +89,27 @@ const FoodIntake = ({ userData }) => {
       const response = await axios.get(`/api/fetch-food-details/${fdcId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-  
+
       let data = response.data;
       if (typeof data === "string") {
         data = data.replace(/NaN/g, "null");
         data = JSON.parse(data);
       }
-  
-      // Helper function to extract numeric values from strings
-  
+
       const formattedFood = {
         name: data.name,
         calories: extractNumber(data.calories),
-        fat: extractNumber(data.total_fat),  // Ensure total_fat extraction
-        carbs: extractNumber(data.carbohydrate), // Ensure carbohydrate extraction
+        fat: extractNumber(data.total_fat),
+        carbs: extractNumber(data.carbohydrate),
         protein: extractNumber(data.protein),
       };
-  
-      console.log("Food Data Extracted:", formattedFood); // Debugging log
+
       setSelectedFood(formattedFood);
     } catch (error) {
       console.error("Error fetching food details:", error);
     }
   };
 
-  
   const handleAddFoodItem = () => {
     if (selectedFood && grams && parseInt(grams, 10) > 0) {
       const gramsValue = parseInt(grams, 10);
@@ -100,46 +117,92 @@ const FoodIntake = ({ userData }) => {
         food: selectedFood.name,
         grams: gramsValue,
         calories: (extractNumber(selectedFood.calories) * (gramsValue / 100)) || 0,
-        fat: (extractNumber(selectedFood.fat) * (gramsValue / 100)),  // Corrected key
-        carbs: (extractNumber(selectedFood.carbs) * (gramsValue / 100)), // Corrected key
+        fat: (extractNumber(selectedFood.fat) * (gramsValue / 100)),
+        carbs: (extractNumber(selectedFood.carbs) * (gramsValue / 100)),
         protein: (extractNumber(selectedFood.protein) * (gramsValue / 100)) || 0,
       };
-      console.log("Adding Food Item:", foodWithData);  // Debugging log
   
-      setFoodItems([...foodItems, foodWithData]);
+      setFoodItems(prevItems => [...prevItems, foodWithData]);
+
+      setCurrentCalorieIntake(prevCalories => prevCalories + foodWithData.calories);
+
+      // ✅ Update Calorie Data dynamically
+    if (calorieData) {
+      setCalorieData(prevData => ({
+        ...prevData,
+        total_calories_consumed: prevData.total_calories_consumed + foodWithData.calories,
+        calories_left_for_day: prevData.calorie_target - (prevData.total_calories_consumed + foodWithData.calories),
+      }));
+    }
+
       setFoodQuery('');
       setGrams('');
       setFoodSuggestions([]);
       setSelectedFood(null);
+    } else {
+      console.error("Invalid food or grams input.");
     }
   };
   
-
   const handleMealLogSubmit = async () => {
+    if (!mealTime || foodItems.length === 0) {
+      console.error("Meal time and at least one food item are required.");
+      return alert("Please select a meal time and add at least one food item.");
+    }
+  
+    const foodLogData = {
+      mealTime, 
+      foods: foodItems.map(item => ({
+        name: item.food,
+        calories: item.calories,
+        fat: item.fat,
+        carbs: item.carbs,
+        protein: item.protein,
+      })),
+    };
+
     try {
       const token = getAuthToken();
-      const foodLogData = {
-        mealTime, 
-        foods: foodItems.map(item => ({
-          name: item.food,
-          calories: item.calories,
-          fat: item.fat,
-          carbs: item.carbs,
-          protein: item.protein,
-        })),
-      };
       await axios.post("/api/add-food-log", foodLogData, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      // Refresh calorie data after submission
+      const updatedCalorieData = await axios.get("/api/get-daily-calories", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setCalorieData(updatedCalorieData.data);
       setFoodItems([]);
+      setMealTime(""); 
+      setCurrentCalorieIntake(0); // Reset after submission
     } catch (error) {
-      console.error("Error adding food log:", error);
+      console.error("Error adding food log:", error.response ? error.response.data : error.message);
     }
   };
+
+  
 
   return (
     <div className="food-intake-container">
       <h1>Food Intake</h1>
+
+      {loading ? (
+        <p>Loading calorie data...</p>
+      ) : (
+        calorieData && (
+          <div className="calorie-summary">
+            <p><strong>Daily Calorie Target:</strong> {calorieData.calorie_target} kcal</p>
+            <p><strong>Calories Consumed:</strong> {calorieData.total_calories_consumed} kcal</p>
+            <p><strong>Calories Left:</strong> {calorieData.calories_left_for_day} kcal</p>
+          </div>
+        )
+      )}
+
+      <div className="calorie-tracker-card">
+        <h2>Current Calorie Intake</h2>
+        <p><strong>Calories:</strong> {currentCalorieIntake.toFixed(1)} kcal</p>
+      </div>
 
       <div className="food-input-container">
         <div className="input-group">
@@ -179,7 +242,6 @@ const FoodIntake = ({ userData }) => {
           </select>
         </div>
       </div>
-
       <table>
         <thead>
           <tr>
@@ -204,6 +266,7 @@ const FoodIntake = ({ userData }) => {
           ))}
         </tbody>
       </table>
+
 
       <button className="submit-btn" onClick={handleMealLogSubmit}>Submit Meal Log</button>
     </div>
